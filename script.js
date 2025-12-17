@@ -5,10 +5,39 @@ const liveStatus = document.getElementById("liveStatus");
 
 let previousPrices = {};
 let refreshPaused = false;
+let lastCSVData = "";
 
 function updateLiveStatus() {
   const now = new Date().toLocaleTimeString();
   liveStatus.textContent = `● Live • Updated ${now}`;
+}
+
+function renderTable(csv) {
+  const rows = csv.split("\n").slice(1);
+  tbody.innerHTML = "";
+
+  rows.forEach(row => {
+    const cols = row.split(",");
+    if (cols.length >= 4) {
+      const name = cols[0];
+      const price = cols[3];
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${cols[0]}</td>
+        <td>${cols[1]}</td>
+        <td>${cols[2]}</td>
+        <td>${price}</td>
+      `;
+
+      if (previousPrices[name] && previousPrices[name] !== price) {
+        tr.classList.add("price-updated");
+      }
+
+      previousPrices[name] = price;
+      tbody.appendChild(tr);
+    }
+  });
 }
 
 function loadData() {
@@ -17,46 +46,20 @@ function loadData() {
   fetch(sheetURL + "&t=" + Date.now())
     .then(res => res.text())
     .then(csv => {
-      const rows = csv.split("\n").slice(1);
-      tbody.innerHTML = "";
-
-      rows.forEach(row => {
-        const cols = row.split(",");
-        if (cols.length >= 4) {
-          const name = cols[0];
-          const price = cols[3];
-
-          const tr = document.createElement("tr");
-
-          tr.innerHTML = `
-            <td>${cols[0]}</td>
-            <td>${cols[1]}</td>
-            <td>${cols[2]}</td>
-            <td>${price}</td>
-          `;
-
-          // Highlight if price changed
-          if (previousPrices[name] && previousPrices[name] !== price) {
-            tr.classList.add("price-updated");
-          }
-
-          previousPrices[name] = price;
-          tbody.appendChild(tr);
-        }
-      });
-
+      lastCSVData = csv;
+      renderTable(csv);
       updateLiveStatus();
     })
     .catch(err => console.error("CSV fetch error:", err));
 }
 
-// Initial load
+/* Initial load */
 loadData();
 
-// Auto refresh every 2 seconds
+/* Auto refresh every 2 seconds */
 setInterval(loadData, 2000);
 
-/* Pause refresh while typing */
+/* SEARCH HANDLING — THIS IS THE FIX */
 searchInput.addEventListener("input", () => {
   refreshPaused = true;
 
@@ -67,9 +70,14 @@ searchInput.addEventListener("input", () => {
       : "none";
   });
 
-  // Resume refresh after user stops typing (1.5 sec)
-  clearTimeout(searchInput._timer);
-  searchInput._timer = setTimeout(() => {
+  // Resume refresh ONLY after user stops typing
+  clearTimeout(searchInput._typingTimer);
+  searchInput._typingTimer = setTimeout(() => {
     refreshPaused = false;
+
+    // Re-render fresh data once search ends
+    if (lastCSVData) {
+      renderTable(lastCSVData);
+    }
   }, 1500);
 });
