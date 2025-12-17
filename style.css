@@ -53,3 +53,23 @@ tr:hover {
   0% { background-color: #fff3cd; }
   100% { background-color: transparent; }
 }
+
+.refresh-btn {
+  padding: 8px 14px;
+  margin: 10px 0;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background-color: #007bff;
+  color: white;
+}
+
+.refresh-btn:hover {
+  background-color: #0056b3;
+}
+
+.refresh-btn:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
