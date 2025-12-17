@@ -6,26 +6,30 @@ const searchInput = document.getElementById("search");
 const liveStatus = document.getElementById("liveStatus");
 const refreshBtn = document.getElementById("refreshBtn");
 
-/* Update live badge */
+/* cooldown to avoid hitting same cached CSV snapshot */
+let lastRefreshTime = 0;
+const REFRESH_COOLDOWN_MS = 3000;
+
+/* update live badge */
 function updateLiveStatus(text) {
   const now = new Date().toLocaleTimeString();
   liveStatus.textContent = `● ${text} at ${now}`;
 }
 
-/* Simple CSV parser (safe for commas in quotes) */
+/* robust CSV parser (handles commas inside quotes) */
 function parseCSV(csv) {
   const rows = [];
   let row = [];
   let value = "";
-  let insideQuotes = false;
+  let inQuotes = false;
 
   for (let char of csv) {
     if (char === '"') {
-      insideQuotes = !insideQuotes;
-    } else if (char === "," && !insideQuotes) {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
       row.push(value);
       value = "";
-    } else if (char === "\n" && !insideQuotes) {
+    } else if (char === "\n" && !inQuotes) {
       row.push(value);
       rows.push(row);
       row = [];
@@ -34,19 +38,21 @@ function parseCSV(csv) {
       value += char;
     }
   }
-  if (value) {
+
+  if (value.length) {
     row.push(value);
     rows.push(row);
   }
+
   return rows;
 }
 
-/* Render ONLY first 4 columns */
+/* render ONLY first 4 columns */
 function renderTable(csv) {
   const rows = parseCSV(csv);
-  if (rows.length === 0) return;
+  if (!rows.length) return;
 
-  /* Headers: first 4 columns only */
+  /* headers */
   thead.innerHTML = "";
   const headerRow = document.createElement("tr");
   rows[0].slice(0, 4).forEach(col => {
@@ -56,7 +62,7 @@ function renderTable(csv) {
   });
   thead.appendChild(headerRow);
 
-  /* Body: first 4 columns only */
+  /* body */
   tbody.innerHTML = "";
   rows.slice(1).forEach(row => {
     if (row.length < 4) return;
@@ -71,12 +77,24 @@ function renderTable(csv) {
   });
 }
 
-/* Fetch + render (manual refresh only) */
+/* fetch + render with strong cache busting */
 function fetchAndRender() {
+  const now = Date.now();
+
+  /* prevent rapid refresh hitting same cached snapshot */
+  if (now - lastRefreshTime < REFRESH_COOLDOWN_MS) {
+    updateLiveStatus("Please wait before refreshing");
+    return;
+  }
+
+  lastRefreshTime = now;
   refreshBtn.disabled = true;
   updateLiveStatus("Refreshing");
 
-  fetch(sheetURL + "&t=" + Date.now())
+  const cacheBust =
+    Date.now().toString() + "-" + Math.random().toString(36).substring(2);
+
+  fetch(sheetURL + "&nocache=" + cacheBust)
     .then(res => res.text())
     .then(csv => {
       renderTable(csv);
@@ -91,13 +109,13 @@ function fetchAndRender() {
     });
 }
 
-/* Initial load */
+/* initial load */
 fetchAndRender();
 
-/* Manual refresh */
+/* manual refresh only */
 refreshBtn.addEventListener("click", fetchAndRender);
 
-/* Search across visible columns only */
+/* search across visible columns only */
 searchInput.addEventListener("input", () => {
   const value = searchInput.value.toLowerCase();
   document.querySelectorAll("tbody tr").forEach(row => {
